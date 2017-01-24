@@ -55,17 +55,19 @@ class CLI(Cmd):
         if mobility.isMobility == False and mobility.DRAW:
             
             for sta in mininet.stations:
-                if 'position' not in sta.params:
-                    sta.params['position'] = 0,0,0
+                if sta.func[0] == 'ap':
+                    mininet.accessPoints.append(sta)
+                    mininet.stations.remove(sta)
             
             for sta in mininet.stations:
-                if sta.func[0] == 'ap':
-                    mobility.accessPoints.append(sta)
+                if 'position' not in sta.params:
+                    sta.params['position'] = 0,0,0
             
             if mobility.accessPoints == []:
                 mobility.accessPoints = mininet.accessPoints
             if mobility.stations == []: 
                 mobility.stations = mininet.stations
+            
             nodes = mininet.stations + mininet.accessPoints + mininet.plotNodes
             
             try:
