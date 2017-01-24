@@ -58,6 +58,10 @@ class CLI(Cmd):
                 if 'position' not in sta.params:
                     sta.params['position'] = 0,0,0
             
+            for sta in mininet.stations:
+                if sta.func[0] == 'ap':
+                    mobility.accessPoints.append(sta)
+            
             if mobility.accessPoints == []:
                 mobility.accessPoints = mininet.accessPoints
             if mobility.stations == []: 
