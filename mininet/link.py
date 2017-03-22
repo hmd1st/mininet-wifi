@@ -548,7 +548,8 @@ class TCIntfWireless(IntfWireless):
         # Clear existing configuration
         cmds = []
         tcoutput = self.tc('%s qdisc show dev %s')
-        if "priomap" not in tcoutput and "qdisc noqueue" not in tcoutput:
+        if "priomap" not in tcoutput and "qdisc noqueue" not in tcoutput \
+            and tcoutput != 'qdisc mq 0: root':
             cmds = [ '%s qdisc del dev %s root' ]
         else:
             cmds = []
@@ -566,15 +567,7 @@ class TCIntfWireless(IntfWireless):
                                             max_queue_size=max_queue_size,
                                             parent=parent)
         cmds += delaycmds
-
-        # Ugly but functional: display configuration info
-        stuff = (([ '%.2fMbit' % bw ] if bw is not None else []) + 
-                  ([ '%s delay' % delay ] if delay is not None else []) + 
-                  ([ '%s jitter' % jitter ] if jitter is not None else []) + 
-                  (['%5f%% loss' % loss ] if loss is not None else []) + 
-                  ([ 'ECN' ] if enable_ecn else [ 'RED' ]
-                    if enable_red else []))
-        
+       
         # Execute all the commands in our node
         debug("at map stage w/cmds: %s\n" % cmds)
         tcoutputs = [ self.tc(cmd) for cmd in cmds ]
@@ -813,7 +806,9 @@ class WirelessLinkAP(object):
         
         if port1 is not None:
             params1[ 'port' ] = port1
-          
+        
+        ifacename = 'wlan'  
+        
         if 'port' not in params1:
             if intfName1 == None:
                 nodelen = int(len(node1.params['wlan']))
@@ -822,24 +817,26 @@ class WirelessLinkAP(object):
                     params1[ 'port' ] = node1.newPort()
                 else:
                     params1[ 'port' ] = currentlen
-                ifacename = 'wlan'
                 intfName1 = self.wlanName(node1, ifacename, params1[ 'port' ])
                 intf1 = cls1(name=intfName1, node=node1,
                         link=self, mac=addr1, **params1)
-                intf2 = 'wireless'
             else:
                 params1[ 'port' ] = node1.newPort()
                 node1.newPort()
                 intf1 = cls1(name=intfName1, node=node1,
                     link=self, mac=addr1, **params1)
-                intf2 = 'wireless'
+        else:
+            intfName1 = self.wlanName(node1, ifacename, params1[ 'port' ])
+            intf1 = cls1(name=intfName1, node=node1,
+                      link=self, mac=addr1, **params1)
 
         if not intfName1:
-            ifacename = 'wlan'
             intfName1 = self.wlanName(node1, ifacename, node1.newWlanPort())
            
         if not cls1:
             cls1 = intf
+            
+        intf2 = 'wireless'
         # All we are is dust in the wind, and our two interfaces
         self.intf1, self.intf2 = intf1, intf2
     # pylint: enable=too-many-branches    
@@ -1179,7 +1176,7 @@ class Association(Link):
         """
         node.params['rssi'][wlan] = -62
         node.params['snr'][wlan] = -62 - (-90.0)
-        
+           
         if 'mp' not in node.params['wlan'][wlan]:
             node.convertIfaceToMesh(node, wlan)
             iface = node.params['wlan'][wlan]
