@@ -120,6 +120,8 @@ class mobility (object):
         else:
             rssi_ = setChannelParams.setRSSI(sta, ap, wlan, dist)
             ap.params['stationsInRange'][sta] = rssi_
+            if sta in ap.params['associatedStations'] and ap.params['stationsInRange'][sta] > -44.5:
+					sta.params['swch']=False
         if ap == sta.params['associatedTo'][wlan]:
             rssi_ = setChannelParams.setRSSI(sta, ap, wlan, dist)
             sta.params['rssi'][wlan] = rssi_
@@ -129,6 +131,10 @@ class mobility (object):
                 ap.params['associatedStations'].append(sta)  
             if dist >= 0.01:
                 setChannelParams(sta, ap, wlan, dist) 
+            if ap.params['stationsInRange'][sta] <= -44.5 and sta.params['swch']==False: 
+				ap.cmd('echo "%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],ap.params['controller_IP']))
+				#~ print(sta.params['mac'], ap.params['stationsInRange'][sta],ap.params['controller_IP'],ap.name)
+				sta.params['swch']=True
         setChannelParams.recordParams(sta, ap)
                 
     @classmethod
@@ -171,16 +177,16 @@ class mobility (object):
             changeAP = value.changeAP
 
         if sta.params['associatedTo'][wlan] == '' or changeAP == True:
-            if ap not in sta.params['associatedTo']:
-                cls = Association
-                if 'encrypt' not in ap.params:
-                    cls.associate_noEncrypt(sta, ap, wlan)
-                else:
-                    if ap.params['encrypt'][0] == 'wpa' or ap.params['encrypt'][0] == 'wpa2':
-                        cls.associate_wpa(sta, ap, wlan)
-                    elif ap.params['encrypt'][0] == 'wep':
-                        cls.associate_wep(sta, ap, wlan)
-                self.updateAssociation(sta, ap, wlan)
+			if ap not in sta.params['associatedTo']:
+				cls = Association
+				if 'encrypt' not in ap.params:
+					cls.associate_noEncrypt(sta, ap, wlan)
+				else:
+					if ap.params['encrypt'][0] == 'wpa' or ap.params['encrypt'][0] == 'wpa2':
+						cls.associate_wpa(sta, ap, wlan)
+					elif ap.params['encrypt'][0] == 'wep':
+						cls.associate_wep(sta, ap, wlan)
+				self.updateAssociation(sta, ap, wlan)
     
     @classmethod     
     def updateAssociation(self, sta, ap, wlan):
@@ -406,8 +412,8 @@ class mobility (object):
         if meshRouting.routing == 'custom':
             meshRouting(nodes)
         # have to verify this
-        eval(self.continueParams)        
-    
+        eval(self.continueParams) 
+            
     @classmethod
     def parameters(self):
         """ 

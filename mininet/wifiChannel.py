@@ -130,7 +130,6 @@ class setChannelParams (object):
     @classmethod
     def recordParams(self, sta, ap):
         """ Records node params to a file
-        
         :param sta: station
         :param ap: access point
         """

@@ -187,7 +187,6 @@ class Node(object):
         defaults: Default IP and MAC addresses
         mode: if interface is running in managed or master mode
         """
-        
         node.params['frequency'] = []
         node.params['wlan'] = []
         node.params['mac'] = []

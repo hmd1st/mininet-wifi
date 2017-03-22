@@ -324,8 +324,8 @@ class Mininet(object):
         self.hosts.append(sta)
         self.stations.append(sta)
         self.nameToNode[ name ] = sta 
-        
         self.nRadios = sta.addParameters(sta, self.nRadios, self.autoSetMacs, params, defaults)
+        sta.params['swch']=False
         return sta
     
     def addAPAdhoc(self, name, cls=None, **params):
@@ -442,7 +442,6 @@ class Mininet(object):
         
         self.nameToNode[ name ] = ap
         ap.type = 'accessPoint'
-        
         self.nRadios = ap.addParameters(ap, self.nRadios, self.autoSetMacs, params, defaults, mode='master')
         self.switches.append(ap)
         self.accessPoints.append(ap)        
