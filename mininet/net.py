@@ -1784,8 +1784,7 @@ class Mininet(object):
         debug('Starting mobility thread...\n')
         self.thread = threading.Thread(name='mobility', target=mobility.definedPosition, kwargs=dict(mobilityparam,))
         self.thread.daemon = True
-        self.thread.start()
-        
+        self.thread.start()        
         self.setWifiParameters()
 
     def setWifiParameters(self):
@@ -1793,6 +1792,7 @@ class Mininet(object):
         Opens a thread for wifi parameters
         """
         self.thread = threading.Thread(name='wifiParameters', target=mobility.parameters)
+        self.thread.daemon = True
         self.thread.start()
 
     def useExternalProgram(self, program, **params):
