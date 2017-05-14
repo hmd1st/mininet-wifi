@@ -152,21 +152,26 @@ class WmediumdStarter(object):
     is_initialized = False
     intfrefs = None
     links = None
+    positions = None
+    txpowers = None
     executable = None
     parameters = None
     auto_add_links = None
     default_auto_snr = None
-
+    enable_interference = None
+    
     is_connected = False
     wmd_process = None
     wmd_config_name = None
     wmd_logfile = None
     default_auto_errprob = 0.0
     use_errprob = False
+    enable_interference = False
 
     @classmethod
     def initialize(cls, intfrefs=None, links=None, executable='wmediumd', with_server=True, parameters=None,
-                   auto_add_links=True, default_auto_snr=-10, default_auto_errprob=1.0, use_errprob=False):
+                   auto_add_links=True, default_auto_snr=-10, default_auto_errprob=1.0, use_errprob=False, 
+                   enable_interference=False, positions=None, txpowers=None):
         """
         Set the data for the wmediumd daemon
 
@@ -193,6 +198,8 @@ class WmediumdStarter(object):
             parameters.append('-s')
         cls.intfrefs = intfrefs
         cls.links = links
+        cls.positions = positions
+        cls.txpowers = txpowers
         cls.executable = executable
         cls.parameters = parameters
         cls.auto_add_links = auto_add_links
@@ -200,6 +207,7 @@ class WmediumdStarter(object):
         cls.default_auto_errprob = default_auto_errprob
         cls.use_errprob = use_errprob
         cls.is_initialized = True
+        cls.enable_interference = enable_interference
 
     @classmethod
     def start(cls):
@@ -217,42 +225,52 @@ class WmediumdStarter(object):
 
         mappedintfrefs = {}
         mappedlinks = {}
-
-        # Map all links using the interface identifier and check for missing interfaces in the  intfrefs list
-        for link in cls.links:
-            link_id = link.sta1intfref.identifier() + '/' + link.sta2intfref.identifier()
-            mappedlinks[link_id] = link
-            found1 = False
-            found2 = False
-            for intfref in cls.intfrefs:
-                if link.sta1intfref.get_station_name() == intfref.get_station_name():
+        mappedpositions = {}
+        mappedtxpowers = {}
+        if cls.enable_interference:
+            """check it"""
+            #for position in cls.positions:
+            #    pos_id = position.sta_position.identifier()
+            #    mappedpositions[pos_id] = position
+            #for txpower in cls.txpowers:
+            #    txpower_id = txpower.sta_txpower.identifier()
+            #    mappedtxpowers[txpower_id] = txpower
+        else:
+            # Map all links using the interface identifier and check for missing interfaces in the  intfrefs list
+            for link in cls.links:
+                link_id = link.sta1intfref.identifier() + '/' + link.sta2intfref.identifier()
+                mappedlinks[link_id] = link
+                found1 = False
+                found2 = False
+                for intfref in cls.intfrefs:
                     if link.sta1intfref.get_station_name() == intfref.get_station_name():
-                        found1 = True
-                if link.sta2intfref.get_station_name() == intfref.get_station_name():
+                        if link.sta1intfref.get_station_name() == intfref.get_station_name():
+                            found1 = True
                     if link.sta2intfref.get_station_name() == intfref.get_station_name():
-                        found2 = True
-            if not found1:
-                raise WmediumdException('%s is not part of the managed interfaces' % link.sta1intfref.identifier())
-                pass
-            if not found2:
-                raise WmediumdException('%s is not part of the managed interfaces' % link.sta2intfref.identifier())
-
-        # Auto add links
-        if cls.auto_add_links:
-            for intfref1 in cls.intfrefs:
-                for intfref2 in cls.intfrefs:
-                    if intfref1 != intfref2:
-                        link_id = intfref1.identifier() + '/' + intfref2.identifier()
-                        if cls.use_errprob:
-                            mappedlinks.setdefault(link_id,
-                                                   WmediumdERRPROBLink(intfref1, intfref2, cls.default_auto_errprob))
-                        else:
-                            mappedlinks.setdefault(link_id, WmediumdSNRLink(intfref1, intfref2, cls.default_auto_snr))
+                        if link.sta2intfref.get_station_name() == intfref.get_station_name():
+                            found2 = True
+                if not found1:
+                    raise WmediumdException('%s is not part of the managed interfaces' % link.sta1intfref.identifier())
+                    pass
+                if not found2:
+                    raise WmediumdException('%s is not part of the managed interfaces' % link.sta2intfref.identifier())
+        
+            # Auto add links
+            if cls.auto_add_links:
+                for intfref1 in cls.intfrefs:
+                    for intfref2 in cls.intfrefs:
+                        if intfref1 != intfref2:
+                            link_id = intfref1.identifier() + '/' + intfref2.identifier()
+                            if cls.use_errprob:
+                                mappedlinks.setdefault(link_id,
+                                                       WmediumdERRPROBLink(intfref1, intfref2, cls.default_auto_errprob))
+                            else:
+                                mappedlinks.setdefault(link_id, WmediumdSNRLink(intfref1, intfref2, cls.default_auto_snr))
 
         # Create wmediumd config
         wmd_config = tempfile.NamedTemporaryFile(prefix='mn_wmd_config_', suffix='.cfg', delete=False)
         cls.wmd_config_name = wmd_config.name
-        info("Name of wmediumd config: %s\n" % cls.wmd_config_name)
+        debug("Name of wmediumd config: %s\n" % cls.wmd_config_name)
         configstr = 'ifaces:\n{\n\tids = ['
         intfref_id = 0
         for intfref in cls.intfrefs:
@@ -262,32 +280,57 @@ class WmediumdStarter(object):
             configstr += '"%s"' % grepped_mac
             mappedintfrefs[intfref.identifier()] = intfref_id
             intfref_id += 1
-        configstr += '];\n};model:\n{\n\ttype = "'
-        if cls.use_errprob:
-            configstr += 'prob'
+        if cls.enable_interference: #Still have to be implemented
+            configstr += '];\n\tenable_interference = true;\n};\npath_loss:\n{\n'
+            configstr += '\tpositions = ('            
+            first_pos = True
+            for mappedposition in cls.positions:
+                pos1 = mappedposition.sta_position[0]
+                pos2 = mappedposition.sta_position[1]
+                if first_pos:
+                    first_pos = False
+                else:
+                    configstr += ','
+                configstr += '\n\t\t(%d, %d)' % (
+                        pos1, pos2)
+            configstr += '\n\t);\n\ttx_powers = ('
+            first_txpower = True
+            for mappedtxpower in cls.txpowers:
+                txpower = mappedtxpower.sta_txpower
+                if first_txpower:
+                    configstr += '%s' % (txpower)
+                    first_txpower = False
+                else:
+                    configstr += ', %s' % (txpower)
+            configstr += ');\n\tmodel_params = ("log_distance", 3.5, 0.0);\n};' 
+            wmd_config.write(configstr)
+            wmd_config.close()               
         else:
-            configstr += 'snr'
-        configstr += '";\n\tdefault_prob = 1.0;\n\tlinks = ('
-        first_link = True
-        for mappedlink in mappedlinks.itervalues():
-            id1 = mappedlink.sta1intfref.identifier()
-            id2 = mappedlink.sta2intfref.identifier()
-            if first_link:
-                first_link = False
-            else:
-                configstr += ','
+            configstr += '];\n};model:\n{\n\ttype = "'       
             if cls.use_errprob:
-                configstr += '\n\t\t(%d, %d, %f)' % (
-                    mappedintfrefs[id1], mappedintfrefs[id2],
-                    mappedlink.errprob)
+                configstr += 'prob'
             else:
-                configstr += '\n\t\t(%d, %d, %d)' % (
-                    mappedintfrefs[id1], mappedintfrefs[id2],
-                    mappedlink.snr)
-        configstr += '\n\t);\n};'
-        wmd_config.write(configstr)
-        wmd_config.close()
-
+                configstr += 'snr'                
+            configstr += '";\n\tdefault_prob = 1.0;\n\tlinks = ('            
+            first_link = True
+            for mappedlink in mappedlinks.itervalues():
+                id1 = mappedlink.sta1intfref.identifier()
+                id2 = mappedlink.sta2intfref.identifier()
+                if first_link:
+                    first_link = False
+                else:
+                    configstr += ','
+                if cls.use_errprob:
+                    configstr += '\n\t\t(%d, %d, %f)' % (
+                        mappedintfrefs[id1], mappedintfrefs[id2],
+                        mappedlink.errprob)
+                else:
+                    configstr += '\n\t\t(%d, %d, %d)' % (
+                        mappedintfrefs[id1], mappedintfrefs[id2],
+                        mappedlink.snr)
+            configstr += '\n\t);\n};'
+            wmd_config.write(configstr)
+            wmd_config.close()
         # Start wmediumd using the created config
         cmdline = [cls.executable, "-c", cls.wmd_config_name]
         if not cls.use_errprob:
@@ -296,7 +339,7 @@ class WmediumdStarter(object):
             cmdline.append(per_data_file)
         cmdline[1:1] = cls.parameters
         cls.wmd_logfile = tempfile.NamedTemporaryFile(prefix='mn_wmd_log_', suffix='.log', delete=not cls.is_managed)
-        info("Name of wmediumd log: %s\n" % cls.wmd_logfile.name)
+        debug("Name of wmediumd log: %s\n" % cls.wmd_logfile.name)
         if cls.is_managed:
             cmdline[0:0] = ["nohup"]
         cls.wmd_process = subprocess.Popen(cmdline, shell=False, stdout=cls.wmd_logfile,
@@ -351,6 +394,30 @@ class WmediumdStarter(object):
         except OSError:
             pass
 
+class WmediumdPosition(object):
+    def __init__(self, staref, sta_position):
+        """
+        Describes the position of a station
+
+        :param sta_position: Instance of WmediumdPosRef
+
+        :type sta_position: WmediumdPosRef
+        """
+        self.staref = staref
+        self.sta_position = sta_position        
+
+class WmediumdTXPower(object):
+    def __init__(self, staref, sta_txpower):
+        """
+        Describes the Transmission Power of a station
+
+        :param sta_txpower: Instance of WmediumdTXPowerRef
+
+        :type sta_txpower: WmediumdTXPowerRef
+        """
+        self.staref = staref
+        self.sta_txpower = sta_txpower
+
 
 class WmediumdSNRLink(object):
     def __init__(self, sta1intfref, sta2intfref, snr=10):
@@ -386,6 +453,55 @@ class WmediumdERRPROBLink(object):
         self.sta1intfref = sta1intfref
         self.sta2intfref = sta2intfref
         self.errprob = errprob
+
+class WmediumdStaRef:
+    def __init__(self, staname, position, txpower):
+        """
+        An unambiguous reference to an interface of a station
+
+        :param staname: Station name
+        :param intfname: Interface name
+        :param intfmac: Interface MAC address
+
+        :type staname: str
+        :type intfname: str
+        :type intfmac: str
+        """
+        self.__staname = staname
+        self.__position = position
+        self.__txpower = txpower
+
+    def get_station_name(self):
+        """
+        Get the name of the station
+
+        :rtype: str
+        """
+        return self.__staname
+
+    def get_position(self):
+        """
+        Get the position
+
+        :rtype: str
+        """
+        return self.__position
+
+    def get_txpower(self):
+        """
+        Get the txpower
+
+        :rtype: str
+        """
+        return self.__txpower
+
+    def identifier(self):
+        """
+        Identifier used in dicts
+
+        :rtype: str
+        """
+        return self.get_station_name()
 
 
 class WmediumdIntfRef:
@@ -475,6 +591,22 @@ class DynamicWmediumdIntfRef(WmediumdIntfRef):
             index += 1
         if found:
             return self.__sta.params['mac'][index]
+        
+class DynamicWmediumdStaRef(WmediumdStaRef):
+    def __init__(self, sta, position=None, txpower=None):
+        """
+        An unambiguous reference to an interface of a station
+
+        :param sta: Mininet-Wifi station
+        :param intf: Mininet interface or name of Mininet interface. If None, the default interface will be used
+
+        :type sta: Station
+        :type intf: Union [Intf, str, None]
+        """
+        WmediumdStaRef.__init__(self, "", "", "")
+        self.__sta = sta
+        self.__position = position
+        self.__txpower = txpower
 
 
 class WmediumdServerConn(object):
@@ -521,7 +653,7 @@ class WmediumdServerConn(object):
         if cls.connected:
             raise WmediumdException("Already connected to wmediumd server")
         cls.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        print '*** Connecting to wmediumd server %s' % uds_address
+        info('*** Connecting to wmediumd server %s\n' % uds_address)
         cls.sock.connect(uds_address)
         cls.connected = True
 

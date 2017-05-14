@@ -15,7 +15,7 @@ from mininet.wifiMobilityModels import gauss_markov, \
 from mininet.wifiChannel import setChannelParams
 from mininet.wifiAssociationControl import associationControl
 from mininet.wifiMeshRouting import listNodes, meshRouting
-from mininet.wmediumdConnector import WmediumdServerConn
+from mininet.wmediumdConnector import WmediumdServerConn, WmediumdSNRLink
 from mininet.wifiPlot import plot2d, plot3d
 from mininet.link import Association
 
@@ -111,6 +111,7 @@ class mobility (object):
         :param wlan: wlan ID
         :param dist: distance between source and destination  
         """ 
+
         if self.rec_rssi:
             os.system('hwsim_mgmt -k %s %s >/dev/null 2>&1' % (sta.phyID[wlan], abs(int(sta.params['rssi'][wlan]))))
         if ap not in sta.params['apsInRange']:
@@ -118,23 +119,65 @@ class mobility (object):
             rssi_ = setChannelParams.setRSSI(sta, ap, wlan, dist)
             ap.params['stationsInRange'][sta] = rssi_
         else:
-            rssi_ = setChannelParams.setRSSI(sta, ap, wlan, dist)
-            ap.params['stationsInRange'][sta] = rssi_
-            if sta in ap.params['associatedStations'] and ap.params['stationsInRange'][sta] > -44.5:
-					sta.params['swch']=False
+			rssi_ = setChannelParams.setRSSI(sta, ap, wlan, dist)
+			ap.params['stationsInRange'][sta] = rssi_
+			if sta in ap.params['associatedStations'] and ap.params['stationsInRange'][sta] > -43:
+				sta.params['minswch']=False
+			if sta in ap.params['associatedStations'] and ap.params['stationsInRange'][sta] > -45.95:
+				sta.params['maxswch']=False
         if ap == sta.params['associatedTo'][wlan]:
-            rssi_ = setChannelParams.setRSSI(sta, ap, wlan, dist)
-            sta.params['rssi'][wlan] = rssi_
-            snr_ = setChannelParams.setSNR(sta, wlan)
-            sta.params['snr'][wlan] = snr_
-            if sta not in ap.params['associatedStations']:
-                ap.params['associatedStations'].append(sta)  
-            if dist >= 0.01:
-                setChannelParams(sta, ap, wlan, dist) 
-            if ap.params['stationsInRange'][sta] <= -44.5 and sta.params['swch']==False: 
-				ap.cmd('echo "%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],ap.params['controller_IP']))
+			rssi_ = setChannelParams.setRSSI(sta, ap, wlan, dist)
+			sta.params['rssi'][wlan] = rssi_
+			snr_ = setChannelParams.setSNR(sta, wlan)
+			sta.params['snr'][wlan] = snr_
+			if sta not in ap.params['associatedStations']:
+				ap.params['associatedStations'].append(sta)  
+			if not WmediumdServerConn.connected and dist >= 0.01:
+				setChannelParams(sta, ap, wlan, dist) 
+			if ap.params['stationsInRange'][sta] <= -44 and sta.params['minswch']==False: 
+			#~ if ap.params['stationsInRange'][sta] <= -44.5: 
+				#~ ap.cmd('echo "%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],ap.params['controller_IP']))
 				#~ print(sta.params['mac'], ap.params['stationsInRange'][sta],ap.params['controller_IP'],ap.name)
-				sta.params['swch']=True
+				print 'STA ' + str(sta.params['mac']) + 'is ASSOCIATED to '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
+				sta.params['minswch']=True
+				sta.params['x']=len(sta.params['apsInRange'])-1
+				ap.params['AssoMacRSSI1'][sta.params['mac'][0]] = ap.params['stationsInRange'][sta]
+			elif ap.params['stationsInRange'][sta] <= -45.95 and sta.params['maxswch']==False: 
+				#~ print 'STA ' + str(sta.params['mac']) + 'is ASSOCIATED to '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
+				sta.params['maxswch']=True
+				sta.params['y']=len(sta.params['apsInRange'])-1
+				ap.params['AssoMacRSSI2'][sta.params['mac'][0]] = ap.params['stationsInRange'][sta]
+				if (ap.params['AssoMacRSSI1'] != {}) and (ap.params['AssoMacRSSI2'] != {}):	
+					if (ap.params['AssoMacRSSI1'][sta.params['mac'][0]] != None) and (ap.params['AssoMacRSSI2'][sta.params['mac'][0]] != None):
+						print (ap.name, 'ASSO', sta.params['mac'], ap.params['AssoMacRSSI2'][sta.params['mac'][0]] - ap.params['AssoMacRSSI1'][sta.params['mac'][0]])
+						#~ ap.cmd('echo "%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],ap.params['controller_IP']))
+						
+						#~ Uncomment this one for exact getrssi 
+						#~ ap.cmd('echo "%s,%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['AssoMacRSSI2'][sta.params['mac'][0]] - ap.params['AssoMacRSSI1'][sta.params['mac'][0]],'ASSO',ap.params['controller_IP']))
+						print 'STA ' + str(sta.params['mac']) + 'is ASSOCIATED to '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
+			if WmediumdServerConn.connected and dist >= 0.01:
+				WmediumdServerConn.send_snr_update(WmediumdSNRLink(sta.wmediumdIface, ap.wmediumdIface, sta.params['snr'][wlan]))
+        elif ap != sta.params['associatedTo'][wlan] and sta.params['x']>0:
+			#~ print 'STA ' + str(sta.params['mac']) + 'is in RANGE of '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
+			sta.params['x']=sta.params['x']-1
+			ap.params['InRgMacRSSI1'][sta.params['mac'][0]] = ap.params['stationsInRange'][sta]
+        elif ap != sta.params['associatedTo'][wlan] and sta.params['y']>0:
+			#~ print 'STA ' + str(sta.params['mac']) + 'is in RANGE of '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
+			sta.params['y']=sta.params['y']-1
+			ap.params['InRgMacRSSI2'][sta.params['mac'][0]] = ap.params['stationsInRange'][sta]
+			
+			if (ap.params['InRgMacRSSI1'] != {}) and (ap.params['InRgMacRSSI2'] != {}):
+				if (ap.params['InRgMacRSSI1'][sta.params['mac'][0]] != None) and (ap.params['InRgMacRSSI2'][sta.params['mac'][0]] != None):
+					#~ print ap.params['InRgMacRSSI1'][sta.params['mac'][0]]
+					#~ print ap.params['InRgMacRSSI2'][sta.params['mac'][0]]
+					print (ap.name, 'InRg', sta.params['mac'], ap.params['InRgMacRSSI2'][sta.params['mac'][0]] - ap.params['InRgMacRSSI1'][sta.params['mac'][0]])
+					
+					#~ Uncomment this one for exact getrssi 
+					#~ ap.cmd('echo "%s,%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['InRgMacRSSI2'][sta.params['mac'][0]] - ap.params['InRgMacRSSI1'][sta.params['mac'][0]],'RANGE',ap.params['controller_IP']))
+        
+        
+        
+        
         setChannelParams.recordParams(sta, ap)
                 
     @classmethod
@@ -145,7 +188,6 @@ class mobility (object):
         :param sta: station
         :param wlan: wlan ID
         """
-        
         for ap in self.accessPoints:
             dist = setChannelParams.getDistance(sta, ap)
             if dist > ap.params['range']:
@@ -389,26 +431,31 @@ class mobility (object):
             time.sleep(0.5)
             
     @classmethod
-    def parameters_(self, node):
+    def parameters_(self, node=None):
         """ 
         have to check it!
         Applies channel params and handover
         """
-        nodes = self.stations   
+        if node == None:
+            nodes = self.stations 
+        else:
+            nodes = []
+            nodes.append(node)  
         for node_ in self.accessPoints:
             if 'link' in node_.params and node_.params['link'] == 'mesh':
                 nodes.append(node_)
-                
-        for wlan in range(0, len(node.params['wlan'])):
-            if node.func[wlan] == 'mesh' or node.func[wlan] == 'adhoc':
-                if node.type == 'vehicle':
-                    node = node.params['carsta']
-                    wlan = 0
-                dist = listNodes.pairingNodes(node, wlan, nodes)
-                if WmediumdServerConn.connected == False and dist >= 0.01:
-                    setChannelParams(sta=node, wlan=wlan, dist=dist)
-            else:
-                self.handoverCheck(node, wlan)
+
+        for node in nodes:
+            for wlan in range(0, len(node.params['wlan'])):
+                if node.func[wlan] == 'mesh' or node.func[wlan] == 'adhoc':
+                    if node.type == 'vehicle':
+                        node = node.params['carsta']
+                        wlan = 0
+                    dist = listNodes.pairingNodes(node, wlan, nodes)
+                    if WmediumdServerConn.connected == False and dist >= 0.01:
+                        setChannelParams(sta=node, wlan=wlan, dist=dist)
+                else:
+                    self.handoverCheck(node, wlan)
         if meshRouting.routing == 'custom':
             meshRouting(nodes)
         # have to verify this
