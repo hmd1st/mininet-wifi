@@ -377,10 +377,12 @@ class Mininet(object):
         
         self.nRadios = sta.addParameters(sta, self.nRadios, self.autoSetMacs, params, defaults)
         sta.func[0] = 'ap'
-        sta.params['AssoMacRSSI1']={}
-        sta.params['InRgMacRSSI1']={}
-        sta.params['AssoMacRSSI2']={}
-        sta.params['InRgMacRSSI2']={}
+        if sta.func[0] == 'ap':
+			sta.params['AssoMacRSSI1']={}
+			sta.params['InRgMacRSSI1']={}
+			sta.params['AssoMacRSSI2']={}
+			sta.params['InRgMacRSSI2']={}
+			sta.params['r1_r2_sentevent']=[False,False]
         return sta
         
     def addCar(self, name, cls=None, **params):

@@ -112,6 +112,7 @@ class mobility (object):
         :param dist: distance between source and destination  
         """ 
 
+        outevent=False
         if self.rec_rssi:
             os.system('hwsim_mgmt -k %s %s >/dev/null 2>&1' % (sta.phyID[wlan], abs(int(sta.params['rssi'][wlan]))))
         if ap not in sta.params['apsInRange']:
@@ -121,10 +122,11 @@ class mobility (object):
         else:
 			rssi_ = setChannelParams.setRSSI(sta, ap, wlan, dist)
 			ap.params['stationsInRange'][sta] = rssi_
-			if sta in ap.params['associatedStations'] and ap.params['stationsInRange'][sta] > -43:
+			if sta in ap.params['associatedStations'] and ap.params['stationsInRange'][sta] > -43 and ap.func[0]=='ap':
 				sta.params['minswch']=False
-			if sta in ap.params['associatedStations'] and ap.params['stationsInRange'][sta] > -45.95:
+			if sta in ap.params['associatedStations'] and ap.params['stationsInRange'][sta] > -45.95 and ap.func[0]=='ap':
 				sta.params['maxswch']=False
+			outevent=True
         if ap == sta.params['associatedTo'][wlan]:
 			rssi_ = setChannelParams.setRSSI(sta, ap, wlan, dist)
 			sta.params['rssi'][wlan] = rssi_
@@ -134,47 +136,62 @@ class mobility (object):
 				ap.params['associatedStations'].append(sta)  
 			if not WmediumdServerConn.connected and dist >= 0.01:
 				setChannelParams(sta, ap, wlan, dist) 
-			if ap.params['stationsInRange'][sta] <= -44 and sta.params['minswch']==False: 
-			#~ if ap.params['stationsInRange'][sta] <= -44.5: 
-				#~ ap.cmd('echo "%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],ap.params['controller_IP']))
-				#~ print(sta.params['mac'], ap.params['stationsInRange'][sta],ap.params['controller_IP'],ap.name)
-				print 'STA ' + str(sta.params['mac']) + 'is ASSOCIATED to '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
-				sta.params['minswch']=True
-				sta.params['x']=len(sta.params['apsInRange'])-1
-				ap.params['AssoMacRSSI1'][sta.params['mac'][0]] = ap.params['stationsInRange'][sta]
-			elif ap.params['stationsInRange'][sta] <= -45.95 and sta.params['maxswch']==False: 
-				#~ print 'STA ' + str(sta.params['mac']) + 'is ASSOCIATED to '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
-				sta.params['maxswch']=True
-				sta.params['y']=len(sta.params['apsInRange'])-1
-				ap.params['AssoMacRSSI2'][sta.params['mac'][0]] = ap.params['stationsInRange'][sta]
-				if (ap.params['AssoMacRSSI1'] != {}) and (ap.params['AssoMacRSSI2'] != {}):	
-					if (ap.params['AssoMacRSSI1'][sta.params['mac'][0]] != None) and (ap.params['AssoMacRSSI2'][sta.params['mac'][0]] != None):
-						print (ap.name, 'ASSO', sta.params['mac'], ap.params['AssoMacRSSI2'][sta.params['mac'][0]] - ap.params['AssoMacRSSI1'][sta.params['mac'][0]])
-						#~ ap.cmd('echo "%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],ap.params['controller_IP']))
-						
-						#~ Uncomment this one for exact getrssi 
-						#~ ap.cmd('echo "%s,%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['AssoMacRSSI2'][sta.params['mac'][0]] - ap.params['AssoMacRSSI1'][sta.params['mac'][0]],'ASSO',ap.params['controller_IP']))
-						print 'STA ' + str(sta.params['mac']) + 'is ASSOCIATED to '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
+			if ap.func[0]=='ap':
+				#~ ap.params['out']=False
+				if ap.params['stationsInRange'][sta] <= -44 and sta.params['minswch']==False: 
+					#~ ap.cmd('echo "%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],ap.params['controller_IP']))
+					#~ print(sta.params['mac'], ap.params['stationsInRange'][sta],ap.params['controller_IP'],ap.name)
+					
+					#~ ap.cmd('echo "%s,%s,%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],['ASSO'],ap.params['controller_IP']))
+					#~ print 'STA ' + str(sta.params['mac']) + 'is ASSOCIATED to '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
+					ap.cmdPrint('echo "%s,%s,%s,%d" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta] , "ASSO", 1, ap.params['controller_IP']))
+					sta.params['minswch']=True
+					sta.params['x']=len(sta.params['apsInRange'])-1
+					ap.params['AssoMacRSSI1'][sta.params['mac'][0]] = ap.params['stationsInRange'][sta]
+				elif ap.params['stationsInRange'][sta] <= -46 and sta.params['maxswch']==False: 
+					#~ print 'STA ' + str(sta.params['mac']) + 'is ASSOCIATED to '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
+					ap.cmdPrint('echo "%s,%s,%s,%d" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta], "ASSO", 2, ap.params['controller_IP']))
+					#~ ap.cmd('echo "%s,%s,%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],['ASSO'],ap.params['controller_IP']))
+					sta.params['maxswch']=True
+					sta.params['y']=len(sta.params['apsInRange'])-1
+					ap.params['AssoMacRSSI2'][sta.params['mac'][0]] = ap.params['stationsInRange'][sta]
+					#~ if (ap.params['AssoMacRSSI1'] != {}) and (ap.params['AssoMacRSSI2'] != {}):	
+						#~ if (ap.params['AssoMacRSSI1'][sta.params['mac'][0]] != None) and (ap.params['AssoMacRSSI2'][sta.params['mac'][0]] != None):
+							#~ print (ap.name, 'ASSO', sta.params['mac'], ap.params['AssoMacRSSI2'][sta.params['mac'][0]] - ap.params['AssoMacRSSI1'][sta.params['mac'][0]])
+							#~ ap.cmd('echo "%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],ap.params['controller_IP']))
+							
+							#~ Uncomment this one for exact getrssi 
+							#~ ap.cmd('echo "%s,%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['AssoMacRSSI2'][sta.params['mac'][0]] - ap.params['AssoMacRSSI1'][sta.params['mac'][0]],'ASSO',ap.params['controller_IP']))
+							#~ print 'STA ' + str(sta.params['mac']) + 'is ASSOCIATED to '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
 			if WmediumdServerConn.connected and dist >= 0.01:
 				WmediumdServerConn.send_snr_update(WmediumdSNRLink(sta.wmediumdIface, ap.wmediumdIface, sta.params['snr'][wlan]))
-        elif ap != sta.params['associatedTo'][wlan] and sta.params['x']>0:
+        elif ap != sta.params['associatedTo'][wlan] and sta.params['x']>0 and ap.func[0]=='ap':
+			#~ ap.params['out'][sta.params['mac'][0]]=True
 			#~ print 'STA ' + str(sta.params['mac']) + 'is in RANGE of '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
+			ap.cmdPrint('echo "%s,%s,%s,%d" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta], "RANGE", 1, ap.params['controller_IP']))
+			#~ ap.cmd('echo "%s,%s,%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],['RANGE'],ap.params['controller_IP']))
 			sta.params['x']=sta.params['x']-1
 			ap.params['InRgMacRSSI1'][sta.params['mac'][0]] = ap.params['stationsInRange'][sta]
-        elif ap != sta.params['associatedTo'][wlan] and sta.params['y']>0:
+			ap.params['r1_r2_sentevent'][0]=True
+        elif ap != sta.params['associatedTo'][wlan] and sta.params['y']>0 and ap.func[0]=='ap':
+			#~ ap.params['out'][sta.params['mac'][0]]=False
 			#~ print 'STA ' + str(sta.params['mac']) + 'is in RANGE of '+ ap.name + ' With RSSI ' + str(ap.params['stationsInRange'][sta])
+			ap.cmdPrint('echo "%s,%s,%s,%d" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta], "RANGE", 2, ap.params['controller_IP']))
+			#~ ap.cmdPrint('echo "%s,%s,%s,%d" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta], "DONE", 2, ap.params['controller_IP']))
+			#~ ap.cmd('echo "%s,%s,%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta],['RANGE'],ap.params['controller_IP']))
 			sta.params['y']=sta.params['y']-1
 			ap.params['InRgMacRSSI2'][sta.params['mac'][0]] = ap.params['stationsInRange'][sta]
-			
-			if (ap.params['InRgMacRSSI1'] != {}) and (ap.params['InRgMacRSSI2'] != {}):
-				if (ap.params['InRgMacRSSI1'][sta.params['mac'][0]] != None) and (ap.params['InRgMacRSSI2'][sta.params['mac'][0]] != None):
-					#~ print ap.params['InRgMacRSSI1'][sta.params['mac'][0]]
-					#~ print ap.params['InRgMacRSSI2'][sta.params['mac'][0]]
-					print (ap.name, 'InRg', sta.params['mac'], ap.params['InRgMacRSSI2'][sta.params['mac'][0]] - ap.params['InRgMacRSSI1'][sta.params['mac'][0]])
-					
-					#~ Uncomment this one for exact getrssi 
+			ap.params['r1_r2_sentevent'][1]=True
+			#~ if (ap.params['InRgMacRSSI1'] != {}) and (ap.params['InRgMacRSSI2'] != {}):
+				#~ if (ap.params['InRgMacRSSI1'][sta.params['mac'][0]] != None) and (ap.params['InRgMacRSSI2'][sta.params['mac'][0]] != None):
+					#~ print (ap.name, 'InRg', sta.params['mac'], ap.params['InRgMacRSSI2'][sta.params['mac'][0]] - ap.params['InRgMacRSSI1'][sta.params['mac'][0]])
 					#~ ap.cmd('echo "%s,%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['InRgMacRSSI2'][sta.params['mac'][0]] - ap.params['InRgMacRSSI1'][sta.params['mac'][0]],'RANGE',ap.params['controller_IP']))
-        
+        elif  ap.func[0]=='ap' and ap != sta.params['associatedTo'][wlan] and float(setChannelParams.getDistance(ap, sta))>=((float(ap.params['range']))-1) and outevent==True:
+			#~ print ap.params['InRgMacRSSI1'][sta.params['mac'][0]]
+			#~ print ap.params['InRgMacRSSI2']
+			if sta not in ap.params['associatedStations'] and ap.params['r1_r2_sentevent']==[True,False]:
+				ap.cmdPrint('echo "%s,%s,%s,%d" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta], "OUT", 1, ap.params['controller_IP']))
+			#~ print 'out'
         
         
         
