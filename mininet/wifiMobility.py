@@ -96,9 +96,21 @@ class mobility (object):
             # sta.params['frequency'][wlan] = 0
         if sta in ap.params['associatedStations']:
             ap.params['associatedStations'].remove(sta)
+        #~ if ap in sta.params['apsInRange']:
         if ap in sta.params['apsInRange']:
-            sta.params['apsInRange'].remove(ap)
-            ap.params['stationsInRange'].pop(sta, None)
+			#
+			#Out of Range Event
+			#
+			if ap.params['r1_r2_sentevent']==[True,False]:
+				ap.cmdPrint('echo "%s,%s,%s,%d" > /dev/udp/%s/5005' %(sta.params['mac'][0], "-100.0", "OUT", 1, ap.params['controller_IP']))
+				ap.params['r1_r2_sentevent']=[False,False]
+			elif ap.params['r1_r2_sentevent']==[True,True] or ap.params['r1_r2_sentevent']==[False,True]:
+				ap.params['r1_r2_sentevent']=[False,False]
+			#
+			#
+			#
+			sta.params['apsInRange'].remove(ap)
+			ap.params['stationsInRange'].pop(sta, None)
         setChannelParams.recordParams(sta, ap)
             
     @classmethod
@@ -182,16 +194,15 @@ class mobility (object):
 			sta.params['y']=sta.params['y']-1
 			ap.params['InRgMacRSSI2'][sta.params['mac'][0]] = ap.params['stationsInRange'][sta]
 			ap.params['r1_r2_sentevent'][1]=True
+			if ap.params['r1_r2_sentevent']==[True,True] or ap.params['r1_r2_sentevent']==[False,True]:
+				ap.params['r1_r2_sentevent']=[False,False]
 			#~ if (ap.params['InRgMacRSSI1'] != {}) and (ap.params['InRgMacRSSI2'] != {}):
 				#~ if (ap.params['InRgMacRSSI1'][sta.params['mac'][0]] != None) and (ap.params['InRgMacRSSI2'][sta.params['mac'][0]] != None):
 					#~ print (ap.name, 'InRg', sta.params['mac'], ap.params['InRgMacRSSI2'][sta.params['mac'][0]] - ap.params['InRgMacRSSI1'][sta.params['mac'][0]])
 					#~ ap.cmd('echo "%s,%s,%s" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['InRgMacRSSI2'][sta.params['mac'][0]] - ap.params['InRgMacRSSI1'][sta.params['mac'][0]],'RANGE',ap.params['controller_IP']))
-        elif  ap.func[0]=='ap' and ap != sta.params['associatedTo'][wlan] and float(setChannelParams.getDistance(ap, sta))>=((float(ap.params['range']))-1) and outevent==True:
-			#~ print ap.params['InRgMacRSSI1'][sta.params['mac'][0]]
-			#~ print ap.params['InRgMacRSSI2']
-			if sta not in ap.params['associatedStations'] and ap.params['r1_r2_sentevent']==[True,False]:
-				ap.cmdPrint('echo "%s,%s,%s,%d" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta], "OUT", 1, ap.params['controller_IP']))
-			#~ print 'out'
+        #~ elif  ap.func[0]=='ap' and ap != sta.params['associatedTo'][wlan] and float(setChannelParams.getDistance(ap, sta))>=((float(ap.params['range']))-1) and outevent==True:
+			#~ if sta not in ap.params['associatedStations'] and ap.params['r1_r2_sentevent']==[True,False]:
+				#~ ap.cmdPrint('echo "%s,%s,%s,%d" > /dev/udp/%s/5005' %(sta.params['mac'][0], ap.params['stationsInRange'][sta], "OUT", 1, ap.params['controller_IP']))
         
         
         
